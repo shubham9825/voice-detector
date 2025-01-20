@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Level Detector</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            transition: background-color 0.5s ease;
+        }
+
+        #level {
+            font-size: 2em;
+            margin: 20px;
+        }
+
+        .alert {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body id="bodyAlert">
+    <h1>Sound Level Detector with Alert</h1>
+    <div>Sound Level: <span id="level">0</span></div>
+    <div id="alert" class="alert"></div>
+    <audio id="buzzer" src="" preload="auto"></audio>
+
+    <script>
+        const threshold = 32;  // Decibel threshold for loud sound detection (adjustable)
+        const noiseThreshold = 5;  // Ignore background noise below this threshold
+        const levelDisplay = document.getElementById('level');
+        const alertDisplay = document.getElementById('alert');
+        const bodyDisplay = document.getElementById('bodyAlert');
+        const buzzer = document.getElementById('buzzer');
+        let isBuzzing = false;
+
+        async function startAudioDetection() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                const audioContext = new AudioContext();
+                const analyser = audioContext.createAnalyser();
+                const source = audioContext.createMediaStreamSource(stream);
+                analyser.fftSize = 2048;  // Set the FFT size
+                source.connect(analyser);
+
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+
+                function computeDecibelValue() {
+                    analyser.getByteFrequencyData(dataArray);  // Use frequency data for better accuracy
+
+                    // Calculate average frequency value from the data
+                    let sum = 0;
+                    for (let i = 0; i < bufferLength; i++) {
+                        sum += dataArray[i];
+                    }
+                    const average = sum / bufferLength;
+
+                    // Scale the average value to simulate decibels
+                    const scaledValue = average / 2;  // Adjust scaling factor to match desired sensitivity
+                    const displayedDecibels = Math.min(Math.round(scaledValue), 100);  // Limit the max value to 100 decibels
+
+                    levelDisplay.textContent = displayedDecibels;
+
+                    // Apply noise filtering: ignore background noise below the threshold
+                    if (scaledValue < noiseThreshold) {
+                        alertDisplay.textContent = "";
+                        bodyDisplay.style.backgroundColor = "white";
+                        if (isBuzzing) {
+                            buzzer.pause();
+                            buzzer.currentTime = 1;  // Reset buzzer
+                            isBuzzing = false;
+                        }
+                    } else if (scaledValue > threshold) {
+                        alertDisplay.textContent = "Loud Sound Detected!";
+                        bodyDisplay.style.backgroundColor = "red";
+                        if (!isBuzzing) {
+                            isBuzzing = true;
+                            buzzer.currentTime = 1;  // Reset to the start
+                            buzzer.play().catch((err) => console.error("Error playing buzzer:", err));
+                        }
+                    } else {
+                        alertDisplay.textContent = "";
+                        bodyDisplay.style.backgroundColor = "white";
+                        if (isBuzzing) {
+                            buzzer.pause();
+                            buzzer.currentTime = 1;  // Reset buzzer
+                            isBuzzing = false;
+                        }
+                    }
+
+                    requestAnimationFrame(computeDecibelValue);
+                }
+
+                computeDecibelValue();
+            } catch (error) {
+                console.error("Microphone access error: ", error.message);
+                alert('Microphone access error: ' + error.message);
+            }
+        }
+
+        startAudioDetection();
+    </script>
+</body>
+</html>
